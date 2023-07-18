@@ -1,0 +1,81 @@
+#!/bin/bash
+#
+# Copyright (C) 2023 Thomas Mueller (tm-dd)
+#
+# This code is free software. You can use, redistribute and/or
+# modify it under the terms of the GNU General Public Licence
+# version 2, as published by the Free Software Foundation.
+# This program is distributed without any warranty.
+# See the GNU General Public Licence for more details.
+#
+
+## START SETTINGS
+
+# folders and files for the commands 
+caFolder='/rootca/sub-ca-vpn/'
+caCertFile=${caFolder}'acme_sub_ca_vpn.crt'
+caPrivateKey=${caFolder}'private/acme_sub_ca_vpn.key.decrypted'
+caClientCertFolder=${caFolder}'certs/'
+caConfFile=${caFolder}'ca-conf.conf'
+caClientIndexFile="${caFolder}index.txt"
+caClientCertFileExtension="crt"
+caCrlFile=${caFolder}'crl.pem'
+caCrlNumberFile=${caFolder}'crlnumber'
+caClientIndexAttrFile=${caClientIndexFile}'.attr'
+
+# how long should be the CRL file valid
+caCrlValidDays=70000
+
+# settings for the permitted use of the certificate
+cat << STOPWRITE > ${caConfFile}
+[certs]
+database = ${caClientIndexFile}
+crl_dir = ${caFolder}
+crlnumber = ${caCrlNumberFile}
+default_md = sha512
+STOPWRITE
+
+# settings for ${caClientIndexFile}
+cat << STOPWRITE > ${caClientIndexAttrFile}
+unique_subject = no
+STOPWRITE
+
+## END OF SETTINGS
+
+# the new name of the certificate 
+CN="$1"
+
+# check if parameter is missing
+if [ -z "${CN}" ]
+then
+	echo "ERROR: USAGE $0 CN_NAME_OF_THE_CERTIFICATE"
+	echo "Example: $0 login"
+	exit -1
+fi
+
+# define a start crl number
+if [ ! -f "${caCrlNumberFile}" ]
+then
+	echo 00 > "${caCrlNumberFile}"
+fi
+
+set -x
+
+# build the file name of the client certificate
+caClientCertFile="${caClientCertFolder}${CN}.${caClientCertFileExtension}"
+
+# revoke the certificate in file ${caClientIndexFile}
+openssl ca -config ${caConfFile} -section 'certs' -revoke ${caClientCertFile} -cert ${caCertFile} -keyfile ${caPrivateKey}
+
+# create a new CRL file ${caClientCertFile}
+openssl ca -config ${caConfFile} -section 'certs' -cert ${caCertFile} -keyfile ${caPrivateKey} -crldays ${caCrlValidDays} -gencrl -out ${caCrlFile}
+
+# print the certificate index file
+cat ${caClientIndexFile}
+
+# print the CRL file
+openssl crl -in ${caCrlFile} -text -noout
+
+set +x
+
+exit 0

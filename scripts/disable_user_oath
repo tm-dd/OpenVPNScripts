@@ -1,0 +1,60 @@
+#!/bin/bash
+#
+# Copyright (C) 2023 Thomas Mueller (tm-dd)
+#
+# This code is free software. You can use, redistribute and/or
+# modify it under the terms of the GNU General Public Licence
+# version 2, as published by the Free Software Foundation.
+# This program is distributed without any warranty.
+# See the GNU General Public Licence for more details.
+#
+
+## START SETTINGS
+
+# the new name of the certificate 
+userLogin="$1"
+
+oathFile='/etc/users.oath'
+clientConfigFolder='/openvpn_user_config/'${userLogin}'/'
+qrCodeFilePath="${clientConfigFolder}qr-code-totp.png"
+
+## END OF SETTINGS
+
+# check if parameter is missing
+if [ -z "${userLogin}" ]
+then
+	echo "USAGE: ${0} login"
+	exit -1
+fi
+
+# check if the login is available
+userLoginFound=`getent passwd | grep "^${userLogin}:" | awk -F ':' '{ print $1 }'`
+if [ -z "${userLoginFound}" ]
+then
+	echo "ERROR: login ${userLogin} not available on the local system"
+	exit -1
+fi
+
+# check if the value is till exists
+userOathFound=`grep -P "^HOTP/T30\t" "${oathFile}" | grep -P "\t${userLogin}\t"`
+if [ -z "${userOathFound}" ]
+then
+	echo "ERROR: could not found an active oath value for the user '${userLogin}' in '${oathFile}'"
+	exit -1
+fi
+
+# remove the configuration line from the user
+cp -a "${oathFile}" "${oathFile}.old"
+grep -v "${userOathFound}" "${oathFile}" > "${oathFile}.new"
+grep "${userOathFound}" "${oathFile}" | sed "s/${userLogin}/DISABLED_${userLogin}/" >> "${oathFile}.new"
+( set -x; diff "${oathFile}.new" "${oathFile}.old"; mv "${oathFile}.new" "${oathFile}" )
+
+# try to make the QR code file unreadable for normal local users
+if [ -e "${qrCodeFilePath}" ]
+then 
+	chown root "${qrCodeFilePath}"
+	chmod 0000 "${qrCodeFilePath}"
+fi
+ls -la "${clientConfigFolder}"
+
+exit 0

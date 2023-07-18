@@ -1,0 +1,217 @@
+#!/bin/bash
+#
+# Copyright (C) 2023 Thomas Mueller (tm-dd)
+#
+# This code is free software. You can use, redistribute and/or
+# modify it under the terms of the GNU General Public Licence
+# version 2, as published by the Free Software Foundation.
+# This program is distributed without any warranty.
+# See the GNU General Public Licence for more details.
+#
+
+# get more messages
+if [ "${1}" = "-vv" ]; then echo "PATH=${PATH}"; fi
+
+## START SETTINGS
+
+# folders and files for the commands 
+caFolder='/rootca/sub-ca-vpn/'
+caConfFile=${caFolder}'ca-conf.conf'
+caClientIndexFile="${caFolder}index.txt"
+oathFile='/etc/users.oath'
+scriptPath=`dirname "$0"`'/'
+vpnGroupName='vpn-users'
+
+## END OF SETTINGS
+
+# reload groups from ldap (to remove certificates and oaths)
+date
+echo "reading VPN users ..."
+nscd -i group; sleep 2; getent group "${vpnGroupName}"
+
+# build list of users
+ldapGetentPasswd=`getent passwd -s passwd:ldap`
+ldapUsers=`echo "${ldapGetentPasswd}" | awk -F ':' '{ print $1 }' | sort -n`
+vpnGroupUsers=`getent group "${vpnGroupName}" | sort -n | awk -F ':' '{ print $4 }' | tr ',' ' '`
+vpnOathUsers=`cat "${oathFile}" | awk '{ print $2 }' | sort -n `
+vpnCertUsers=`cat "${caClientIndexFile}" | awk -F '/CN=' '{ print $2 }' | sort -n`
+vpnCertUsersActive=`cat "${caClientIndexFile}" | grep "^V" | awk -F '/CN=' '{ print $2 }' | sort -n`
+vpnCertUsersRevoked=`cat "${caClientIndexFile}" | grep "^R" | awk -F '/CN=' '{ print $2 }' | sort -n`
+
+# break if list of users is empty
+if [ "${vpnGroupUsers}" = "" ]; then echo "WARNING: It is looks like the LIST of VPN USERS is EMPTY. STOP NOW."; exit -1; fi
+
+numbersOfLdapUsers=0; for ldapUser in `echo ${ldapUsers}`; do numbersOfLdapUsers=$((${numbersOfLdapUsers}+1)); done;
+echo "checking ${numbersOfLdapUsers} ldap users on this system ..."
+	
+# check all users in ldap group
+for ldapUser in `echo ${ldapUsers}`
+do
+
+	userIsVpnUser=0
+	# check all users in vpn group
+	for groupUser in `echo ${vpnGroupUsers}`
+	do
+		if [ "${ldapUser}" = "${groupUser}" ] && [ "${userIsVpnUser}" = "0" ]; 
+		then
+			userIsVpnUser=1
+		fi
+	done
+
+	# get more messages
+	if [ "${1}" = "-vv" ]; then echo "........ check user ${ldapUser}"; fi
+	if [ "${1}" = "-v" ]; then echo -n "."; fi
+
+	# for all NOT vpn LDAP accounts, disable and revove the VPN account
+	if [ "${userIsVpnUser}" = "0" ]
+	then
+	
+		## disable old accounts
+
+		# searching if the user certificate is active in ${caClientIndexFile}
+		certUserActiveFound=0
+		for certUser in `echo ${vpnCertUsersActive}`
+		do
+			if [ "${ldapUser}" = "${certUser}" ] && [ "${certUserActiveFound}" = "0" ]; 
+			then
+				# user is in group and have an active certificate
+				certUserActiveFound=1
+			fi
+		done
+
+		# searching if the user certificate is revoked in ${caClientIndexFile} 
+		certUserRevokFound=0
+		for certUser in `echo ${vpnCertUsersRevoked}`
+		do
+			if [ "${ldapUser}" = "${certUser}" ] && [ "${certUserRevokFound}" = "0" ]; 
+			then
+				# user is in group and have an active certificate
+				certUserRevokFound=1
+			fi
+		done
+
+		# revoke the certificate, if it's active and not revoked 
+		if [ "${certUserActiveFound}" = "1" ] && [ "${certUserRevokFound}" = "0" ]
+		then
+			echo; echo "REVOKE certificate for user '${ldapUser}'"
+			( set -x; "${scriptPath}revoke_certificate" "${ldapUser}" )
+		fi
+
+		# remove public client configuration
+		homeDirectory=`echo "${ldapGetentPasswd}" | grep "^${ldapUser}:" | awk -F ':' '{ print $6 }'`
+		if [ "${certUserActiveFound}" = "1" ] && [ "${certUserRevokFound}" = "0" ] && [ -e "${homeDirectory}/public_html" ]
+		then
+			rm "${homeDirectory}/public_html"
+			rmdir "${homeDirectory}"
+		fi
+
+		# searching of an active oath for the user in ${oathFile}
+		oathUserFound=0
+		for oathUser in `echo ${vpnOathUsers}`
+		do
+			if [ "${ldapUser}" = "${oathUser}" ] && [ "${oathUserFound}" = "0" ]
+			then
+				# user is in ${oathFile}
+				oathUserFound=1
+			fi
+		done
+
+		# remove the user from the file ${oathFile}
+		if [ "${oathUserFound}" = "1" ]
+		then
+			echo; echo "DISABLE oath for user '${ldapUser}'"
+			( set -x; "${scriptPath}disable_user_oath" "${ldapUser}" )
+		fi
+
+	fi
+
+done
+
+echo
+
+# check all users in vpn group (to add or reactivate certificates and oaths)
+for groupUser in `echo ${vpnGroupUsers}`
+do
+
+	## add new certificates
+
+	# searching of an active certificate for the user in ${caClientIndexFile}
+	certUserFound=0
+	for certUser in `echo ${vpnCertUsers}`
+	do
+		if [ "${groupUser}" = "${certUser}" ] && [ "${certUserFound}" = "0" ]; 
+		then
+			# user is in group and have an active or revoked certificate
+			certUserFound=1
+		fi
+	done
+	
+	# create a new certificate for the user
+	if [ "${certUserFound}" = "0" ]
+	then
+		echo; echo "CREATE certificate for user '${groupUser}'"
+		( set -x; "${scriptPath}create_client_certificate" "${groupUser}"; "${scriptPath}create_client_configuration" "${groupUser}"; )
+	fi
+
+	## reactivate old certificates
+
+	# searching of an revoked certificate for the user in ${caClientIndexFile}
+	certUserFound=0
+	for certUser in `echo ${vpnCertUsersRevoked}`
+	do
+		if [ "${groupUser}" = "${certUser}" ] && [ "${certUserFound}" = "0" ]; 
+		then
+			# user is in group and have an revoked certificate
+			certUserFound=1
+		fi
+	done
+
+	# reactivate a revoked certificate for the user
+	if [ "${certUserFound}" = "1" ]
+	then
+		echo; echo "REACTIVATE certificate for user '${groupUser}'"
+		( set -x; "${scriptPath}reactivate_certificate" "${groupUser}" )
+	fi
+
+	## add oath for user
+
+	# searching of an active oath for the user in ${oathFile}
+	oathUserFound=0
+	for oathUser in `echo ${vpnOathUsers}`
+	do
+		if [ "${groupUser}" = "${oathUser}" ] && [ "${oathUserFound}" = "0" ]
+		then
+			# user is in ${oathFile}
+			oathUserFound=1
+		fi
+	done
+
+	# enable or add the user to the file ${oathFile}
+	if [ "${oathUserFound}" = "0" ]
+	then
+		
+		# check if a disabled oath for the user exists before
+		userOathFound=`grep -P "^HOTP/T30\t" "${oathFile}" | grep -P "\tDISABLED_${groupUser}\t"`
+
+		# reactivate or add a new oath line in ${oathFile} for the ${groupUser}
+		if [ -n "${userOathFound}" ]
+		then
+			# enable an diabled oath for user
+			echo; echo "ENABLE older oath for user '${groupUser}'"
+			( set -x; "${scriptPath}enable_user_oath" "${groupUser}"; "${scriptPath}create_client_configuration" "${groupUser}";  )
+		else
+			# create a new oath for user
+			echo; echo "ADD oath for user '${groupUser}'"
+			( set -x; "${scriptPath}add_user_oath" "${groupUser}"; "${scriptPath}create_client_configuration" "${groupUser}";  )
+		fi
+
+	fi
+done
+
+# cleanup empty directories
+rmdir /openvpn_user_config/* 2> /dev/null
+
+# get more messages
+if [ "${1}" = "-vv" ]; then date; (set -x; cat "${caClientIndexFile}"; cat "${oathFile}"; ls -l "/home"); fi
+
+exit 0

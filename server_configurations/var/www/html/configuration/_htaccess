@@ -1,0 +1,9 @@
+# redirect to http://vpn.example.org/~login after enter the correct login and password
+AuthType Basic
+AuthName "VPN configuration"
+AuthBasicProvider ldap
+AuthLDAPUrl ldap://ldap.example.org:389/ou=users,ou=example,dc=org?uid
+Require valid-user
+RewriteEngine On
+RewriteCond %{REMOTE_USER} (.+)
+RewriteRule (.*) /~%1/$1 [L,R=302]

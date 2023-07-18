@@ -1,0 +1,105 @@
+#!/bin/bash
+#
+# Copyright (C) 2023 Thomas Mueller (tm-dd)
+#
+# This code is free software. You can use, redistribute and/or
+# modify it under the terms of the GNU General Public Licence
+# version 2, as published by the Free Software Foundation.
+# This program is distributed without any warranty.
+# See the GNU General Public Licence for more details.
+#
+
+## START SETTINGS
+
+# the new name of the certificate 
+userLogin="$1"
+
+# folders and files for the commands 
+caFolder='/rootca/sub-ca-vpn/'
+caClientCertFolder=${caFolder}'certs/'
+caClientKeysFolder=${caFolder}'keys/'
+caChain=${caFolder}'chain.crt'
+clientCert=${caClientCertFolder}${userLogin}'.crt'
+clientKey=${caClientKeysFolder}${userLogin}'.key'
+clientConfigTemplateDir='/etc/openvpn/client/'
+clientConfigFolder='/openvpn_user_config/'${userLogin}'/'
+
+## END OF SETTINGS
+
+# check if parameter is missing
+if [ -z "${userLogin}" ]
+then
+
+	echo "USAGE: $0 LOGIN"
+	exit -1
+fi
+
+# if not exists, create the directory for the new files
+mkdir -p "${clientConfigFolder}"
+
+# change ownership of the configuration folder, if useful and possible
+# ownerAndGroup=`getent passwd | grep "^${userLogin}:" | awk -F ':' '{ print $3 ":" $4 }'`
+ownerAndGroup='www-data:www-data'
+chmod 700 "${clientConfigFolder}"
+chown ${ownerAndGroup} "${clientConfigFolder}"
+
+# check and stop, if somnething is missing
+if [ ! -d "${clientConfigTemplateDir}" ] || [ ! -d "${clientConfigFolder}" ] || [ ! -e "${caChain}" ] || [ ! -e "${clientCert}" ] || [ ! -e "${clientKey}" ]
+then
+	echo "ERROR: something is missing or wrong"
+	ls -ld "${clientConfigTemplateDir}" "${clientConfigFolder}" "${caChain}" "${clientCert}" "${clientKey}"
+	exit -1
+fi
+
+# read the values
+caChainText=`cat ${caChain}`
+clientCertText=`cat ${clientCert}`
+clientKeyText=`cat ${clientKey}`
+
+# copy and edit die configuration files
+cp -a ${clientConfigTemplateDir}*.ovpn "${clientConfigFolder}"
+cd "${clientConfigFolder}"
+for config in *.ovpn
+do
+
+	# insert the CA chain
+	while read newLine; do
+		echo -e "${newLine//###_CA_CERT_CHAIN_###/${caChainText}}"
+	done < "${config}" > "${config}.new"
+	mv "${config}.new" "${config}"
+
+	# insert the user certificate
+	while read newLine; do
+		echo -e "${newLine//###_USER_CERT_###/${clientCertText}}"
+	done < "${config}" > "${config}.new"
+	mv "${config}.new" "${config}"
+
+	# insert the user private key
+	while read newLine; do
+		echo -e "${newLine//###_USER_KEY_###/${clientKeyText}}"
+	done < "${config}" > "${config}.new"
+	mv "${config}.new" "${config}"
+	
+done
+
+# allow downloading the configuration files
+homeDirectory=`getent passwd | grep "^${userLogin}:" | awk -F ':' '{ print $6 }'`
+if [ ! -e "${homeDirectory}/public_html" ]
+then
+	# create a home directory and setup a link
+	mkdir -p "${homeDirectory}"
+	(set -x; ln -s "${clientConfigFolder}" "${homeDirectory}/public_html" )
+fi
+
+# write a htaccess file to allow only the user to access the files
+echo 'Options +FollowSymLinks +Multiviews +Indexes' > "${clientConfigFolder}.htaccess"
+echo "require user ${userLogin}" >> "${clientConfigFolder}.htaccess"
+
+# change ownership of the configuration files, if useful and possible
+chmod 400 ${clientConfigFolder}/*.ovpn
+chown -R ${ownerAndGroup} "${clientConfigFolder}"
+
+# show files
+( set -x; ls -la "${clientConfigFolder}" )
+
+exit 0

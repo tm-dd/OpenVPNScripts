@@ -1,0 +1,19 @@
+--- /usr/share/doc/openvpn/examples/sample-scripts/auth-pam.pl	2021-12-15 06:33:53.000000000 +0000
++++ /etc/openvpn/auth-ldap-with-pam.pl	2023-07-18 20:57:27.706176135 +0000
+@@ -76,6 +76,16 @@
+ 
+ close (UPFILE);
+ 
++# check if the Common Name from the certificate is equal to the login name
++my $cn=$ENV{X509_0_CN};
++if ( "$username" ne "$cn" ) {
++	print "ERROR OpenVPN login: the X509_0_CN '".$cn."' from the certificate is not equal to the login '".$username."' for the PAM authentication\n";
++	exit 1;
++}
++else {
++	print "DEBUG: the X509_0_CN '".$cn."' from the certificate was equal to the login '".$username."' for the PAM authentication\n";
++}
++
+ # Initialize PAM object
+ 
+ if (!ref($pamh = new Authen::PAM($service, $username, \&my_conv_func))) {
