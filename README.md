@@ -1,4 +1,4 @@
-# OpenVpnScripts
+# OpenVPNScripts
 
 scripts and templates to create and manage OpenVPN in different configurations
 
