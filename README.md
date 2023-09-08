@@ -1,11 +1,11 @@
 # OpenVPNScripts
 
 scripts and templates to create and manage OpenVPN in five different configurations, without and with MFA (multi-factor authentication)
-- 'openvpn_server_check_ldap_login.conf' check only (Open-)LDAP login and assword of an user
-- 'openvpn_server_check_cert_and_openvpn-auth-ldap.so.conf' check (Open-)LDAP login and password (via openvpn-auth-ldap.so) of an user and any valid certificate
+- 'openvpn_server_check_ldap_login.conf' check only (Open-)LDAP login and assword of users
+- 'openvpn_server_check_cert_and_openvpn-auth-ldap.so.conf' check (Open-)LDAP login and password (via openvpn-auth-ldap.so) of users and any valid certificate
 - 'openvpn_server_check_cert_and_auth-user-pass-verify.conf' check (Open-)LDAP login and password (via patched auth-ldap-with-pam.pl) and if the certificate has the same login name
 - 'openvpn_server_check_ldap_login_and_totp.conf' check (Open-)LDAP login and password (via openvpn-auth-ldap.so) and (normmaly every hour) a (time based) one-time password
-- 'openvpn_server_check_ldap_login_and_cert_and_totp.conf' check (Open-)LDAP login and password (via openvpn-auth-ldap.so) of an user and any valid certificate and (normmaly every hour) a (time based) one-time password
+- 'openvpn_server_check_ldap_login_and_cert_and_totp.conf' check (Open-)LDAP login and password (via openvpn-auth-ldap.so) of users and any valid certificate and (normmaly every hour) a (time based) one-time password
 
 ## folders
 
