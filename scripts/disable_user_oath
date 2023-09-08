@@ -9,16 +9,11 @@
 # See the GNU General Public Licence for more details.
 #
 
-## START SETTINGS
-
 # the new name of the certificate 
 userLogin="$1"
 
-oathFile='/etc/users.oath'
-clientConfigFolder='/openvpn_user_config/'${userLogin}'/'
-qrCodeFilePath="${clientConfigFolder}qr-code-totp.png"
-
-## END OF SETTINGS
+# read settings from config.cfg
+source "`dirname $0`/config.cfg"
 
 # check if parameter is missing
 if [ -z "${userLogin}" ]
@@ -52,9 +47,11 @@ grep "${userOathFound}" "${oathFile}" | sed "s/${userLogin}/DISABLED_${userLogin
 # try to make the QR code file unreadable for normal local users
 if [ -e "${qrCodeFilePath}" ]
 then 
-	chown root "${qrCodeFilePath}"
+	chown root:root "${qrCodeFilePath}"
 	chmod 0000 "${qrCodeFilePath}"
 fi
-ls -la "${clientConfigFolder}"
+
+# show files
+( set -x; ls -la "${clientConfigFolder}" )
 
 exit 0

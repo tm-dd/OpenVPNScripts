@@ -9,21 +9,13 @@
 # See the GNU General Public Licence for more details.
 #
 
+# the new name of the certificate 
+userLogin="$1"
+
 ## START SETTINGS
 
-# folders and files for the commands 
-caFolder='/rootca/sub-ca-vpn/'
-caCertFile=${caFolder}'acme_sub_ca_vpn.crt'
-caPrivateKey=${caFolder}'private/acme_sub_ca_vpn.key.decrypted'
-caClientCertFolder=${caFolder}'certs/'
-caConfFile=${caFolder}'ca-conf.conf'
-caClientIndexFile="${caFolder}index.txt"
-caCrlFile=${caFolder}'crl.pem'
-caCrlNumberFile=${caFolder}'crlnumber'
-caClientIndexAttrFile=${caClientIndexFile}'.attr'
-
-# how long should be the CRL file valid
-caCrlValidDays=70000
+# read settings from config.cfg
+source "`dirname $0`/config.cfg"
 
 # settings for the permitted use of the certificate
 cat << STOPWRITE > ${caConfFile}
@@ -41,11 +33,8 @@ STOPWRITE
 
 ## END OF SETTINGS
 
-# the new name of the certificate 
-CN="$1"
-
 # check if parameter is missing
-if [ -z "${CN}" ]
+if [ -z "${userLogin}" ]
 then
 	echo "ERROR: USAGE $0 CN_NAME_OF_THE_CERTIFICATE"
 	echo "Example: $0 login"
@@ -61,13 +50,14 @@ fi
 set -x
 
 # create new ${caClientIndexFile}
-cp -a "${caClientIndexFile}" "${caClientIndexFile}.old"
+sort "${caClientIndexFile}" > "${caClientIndexFile}.old"
 cat "${caClientIndexFile}.old" | grep '^V' > "${caClientIndexFile}"
-cat "${caClientIndexFile}.old" | grep '^R' | grep -v "/CN=${CN}$" >> "${caClientIndexFile}"
+cat "${caClientIndexFile}.old" | grep '^R' | grep -v "/CN=${userLogin}$" >> "${caClientIndexFile}"
+cat "${caClientIndexFile}.old" | grep '^R' | grep "/CN=${userLogin}$" | sed 's/R/V/' | awk -F '\t' '{ printf  $1 "\t" $2 "\t\t"; for (i=4; i<NF; i++) printf $i "\t"; print $NF }' >> "${caClientIndexFile}"
 diff "${caClientIndexFile}" "${caClientIndexFile}.old"
 
-# create a new CRL file ${caClientCertFile}
-openssl ca -config ${caConfFile} -section 'certs' -cert ${caCertFile} -keyfile ${caPrivateKey} -crldays ${caCrlValidDays} -gencrl -out ${caCrlFile}
+# create a new CRL file ${caCrlFile}
+openssl ca -config ${caConfFile} -section 'certs' -cert ${caCrtFile} -keyfile ${caKeyFile} -crldays ${caCrlValidDays} -gencrl -out ${caCrlFile}
 
 # print the certificate index file
 cat ${caClientIndexFile}

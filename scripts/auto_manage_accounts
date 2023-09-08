@@ -12,22 +12,16 @@
 # get more messages
 if [ "${1}" = "-vv" ]; then echo "PATH=${PATH}"; fi
 
-## START SETTINGS
+# read settings from config.cfg
+source "`dirname $0`/config.cfg"
 
-# folders and files for the commands 
-caFolder='/rootca/sub-ca-vpn/'
-caConfFile=${caFolder}'ca-conf.conf'
-caClientIndexFile="${caFolder}index.txt"
-oathFile='/etc/users.oath'
+# the path to the scripts
 scriptPath=`dirname "$0"`'/'
-vpnGroupName='vpn-users'
 
-## END OF SETTINGS
-
-# reload groups from ldap (to remove certificates and oaths)
+# reload users and groups from ldap
 date
 echo "reading VPN users ..."
-nscd -i group; sleep 2; getent group "${vpnGroupName}"
+nscd -i passwd; nscd -i group; sleep 2; getent group "${vpnGroupName}"
 
 # build list of users
 ldapGetentPasswd=`getent passwd -s passwd:ldap`
@@ -98,7 +92,8 @@ do
 		fi
 
 		# remove public client configuration
-		homeDirectory=`echo "${ldapGetentPasswd}" | grep "^${ldapUser}:" | awk -F ':' '{ print $6 }'`
+		# homeDirectory=`echo "${ldapGetentPasswd}" | grep "^${ldapUser}:" | awk -F ':' '{ print $6 }'`
+		homeDirectory="/home/${ldapUser}"
 		if [ "${certUserActiveFound}" = "1" ] && [ "${certUserRevokFound}" = "0" ] && [ -e "${homeDirectory}/public_html" ]
 		then
 			rm "${homeDirectory}/public_html"
@@ -209,7 +204,7 @@ do
 done
 
 # cleanup empty directories
-rmdir /openvpn_user_config/* 2> /dev/null
+rmdir "${clientConfigFolderForAllUsers}/*" 2> /dev/null
 
 # get more messages
 if [ "${1}" = "-vv" ]; then date; (set -x; cat "${caClientIndexFile}"; cat "${oathFile}"; ls -l "/home"); fi

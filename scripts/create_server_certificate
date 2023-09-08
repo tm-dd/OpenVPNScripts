@@ -8,37 +8,20 @@
 # This program is distributed without any warranty.
 # See the GNU General Public Licence for more details.
 #
+
 ## START SETTINGS
 
-# folders and files for the commands 
-caRootCertFile='/rootca/rootca/acme_root_ca.crt'
-caFolder='/rootca/sub-ca-vpn/'
-caCertFile=${caFolder}'acme_sub_ca_vpn.crt'
-caPrivateRand=${caFolder}'private/rand'
-caPrivateKey=${caFolder}'private/acme_sub_ca_vpn.key.decrypted'
-caClientCertFolder=${caFolder}'certs/'
-caClientKeysFolder=${caFolder}'keys/'
-caClientSubjectStart="/C=DE/ST=State/L=City/O=ACME/OU=Department/emailAddress=support@example.org"
-caClientExtFile=${caFolder}'conf/extensions.conf'
-caClientIndexFile="${caFolder}index.txt"
-
-# how long should be the certificate vailid
-certValidDays=70000
+# read settings from config.cfg
+source "`dirname $0`/config.cfg"
 
 # settings for the permitted use of the certificate
-cat << STOPWRITE > ${caClientExtFile}
-[client_req_ext]
+cat << STOPWRITE > ${caServerExtFile}
+[server_req_ext]
 keyUsage = digitalSignature
 extendedKeyUsage = clientAuth,serverAuth
 STOPWRITE
 
 ## END OF SETTINGS
-
-# the new name of the certificate 
-CN="$1"
-
-# alternative DNS names, if configured
-ALTDNS="$2"
 
 # if missing, create this folders
 mkdir -p "${caClientCertFolder}" "${caClientKeysFolder}"
@@ -46,62 +29,64 @@ chown root:root "${caClientKeysFolder}" || exit -1
 chmod 700 "${caClientKeysFolder}"
 
 # check if parameter is missing
-if [ -z "${CN}" ]
+if [ -z "${caServerCNName}" ]
 then
 
-	echo "ERROR: USAGE $0 CN_NAME_FOR_THE_NEW_CERTIFICATE [alternative DNS name(s) for the server]"
-	echo "Example: $0 login [DNS:altname1.example.org:DNS:altname2.example.com...]"
+	echo "ERROR: THE CN FOR THE NEW CERTIFICATE IS MISSING."
+	echo "       PLEASE CHECK THE CONFIG FILE."
 	exit -1
 fi
 
 # check and stop, if a client certificate still exists
-if [ -e "${caClientKeysFolder}${CN}.key" ] || [ -e "${caClientCertFolder}${CN}.crt" ]
+if [ -e "${caServerKeyFile}" ] || [ -e "${caServerCrtFile}" ]
 then
-	echo "ERROR: A OLDER CERTIFICATE FOR ${CN} EXITS."
+	echo "ERROR: A OLDER SERVER CERTIFICATE EXITS."
 	echo "Reactivate, remove or rename the older certificate (and retry it again)."
-	ls -l "${caClientKeysFolder}${CN}.key" "${caClientCertFolder}${CN}.crt" "${caClientCertFolder}${CN}_chain.pem" 2> /dev/null
+	ls -l "${caServerKeyFile}" "${caServerCrtFile}" "${caServerCsrFile}" 2> /dev/null
 	exit -1
 fi
 
 # if the parameter will used, try to set alternative DNS name(s)
-if [ -n "${ALTDNS}" ]
+if [ -n "${caServerALTDNSName}" ]
 then
-	echo "subjectAltName = ${ALTDNS}" >> ${caClientExtFile}
+	echo "subjectAltName = ${caServerALTDNSName}" >> ${caServerExtFile}
 fi
 
 set -x
 
 # create the client key
-openssl genrsa -out "${caClientKeysFolder}${CN}.key" -rand "${caPrivateRand}" 4096
+openssl genrsa -out "${caServerKeyFile}" -rand "${caPrivateRand}" 4096
 
 # create the certificates request
-openssl req -newkey rsa:4096 -key "${caClientKeysFolder}${CN}.key" -out "${caClientCertFolder}${CN}.csr" -subj "${caClientSubjectStart}/CN=${CN}"
-openssl req -in "${caClientCertFolder}${CN}.csr" -text -noout
+openssl req -newkey rsa:4096 -key "${caServerKeyFile}" -out "${caServerCsrFile}" -subj "${caCertSubjectStart}/CN=${caServerCNName}"
+openssl req -in "${caServerCsrFile}" -text -noout
+
+cat "${caServerExtFile}"
 
 # sign the certificate and move the certificates request to the temp folder (for later deleting)
-openssl x509 -req -CA "${caCertFile}" -CAkey "${caPrivateKey}" -in "${caClientCertFolder}${CN}.csr" -out "${caClientCertFolder}${CN}.crt" -SHA512 -extfile "${caClientExtFile}" -extensions "client_req_ext" -days ${certValidDays}
+openssl x509 -req -CA "${caCrtFile}" -CAkey "${caKeyFile}" -in "${caServerCsrFile}" -out "${caServerCrtFile}" -sha512 -extfile "${caServerExtFile}" -extensions "server_req_ext" -days ${caServerCertValidDays}
 
 # read the certificate
-openssl x509 -in "${caClientCertFolder}${CN}.crt" -text -noout
+openssl x509 -in "${caServerCrtFile}" -text -noout
 
 # write the serial number
-caClientSerialNumber=`openssl x509 -in "${caClientCertFolder}${CN}.crt" -text -noout | grep -A 1 'Serial Number:' | tail -n 1 | sed 's/://g' | awk '{ print $1 }'`
-echo -e "V\t"`date '+%y%m%d%H%M%SZ'`"\t\t${caClientSerialNumber}\tunknown\t${caClientSubjectStart}/CN=${CN}" >> "${caClientIndexFile}"
+caClientSerialNumber=`openssl x509 -in "${caServerCrtFile}" -text -noout | grep -A 1 'Serial Number:' | tail -n 1 | sed 's/://g' | awk '{ print $1 }'`
+echo -e "V\t"`date '+%y%m%d%H%M%SZ'`"\t\t${caClientSerialNumber}\tunknown\t${caCertSubjectStart}/CN=${caServerCNName}" >> "${caClientIndexFile}"
 
-mv "${caClientCertFolder}${CN}.csr" /tmp/
+mv "${caServerCsrFile}" /tmp/
 
 cat "${caFolder}index.txt"
 
 # create certificate chain
-cat "${caRootCertFile}" "${caCertFile}" "${caClientCertFolder}${CN}.crt" > "${caClientCertFolder}${CN}_chain.pem"
+cat "${caCrtFile}" "${caServerCrtFile}" > "${caServerCrtChainFile}"
 
 set +x
 
 # list the new files
-if [ -e "${caClientKeysFolder}${CN}.key" ] && [ -e "${caClientCertFolder}${CN}.crt" ] && [ -e "${caClientCertFolder}${CN}_chain.pem" ]
+if [ -e "${caServerKeyFile}" ] && [ -e "${caServerCrtFile}" ] && [ -e "${caServerCrtChainFile}" ]
 then
 	echo "NEW FILES:"
-	ls -l "${caClientKeysFolder}${CN}.key" "${caClientCertFolder}${CN}.crt" "${caClientCertFolder}${CN}_chain.pem"
+	ls -l "${caServerKeyFile}" "${caServerCrtFile}" "${caServerCrtChainFile}"
 else
 	echo "Error durring ceation of files..."
 	exit -1

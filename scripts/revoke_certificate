@@ -9,22 +9,13 @@
 # See the GNU General Public Licence for more details.
 #
 
+# the new name of the certificate 
+userLogin="$1"
+
 ## START SETTINGS
 
-# folders and files for the commands 
-caFolder='/rootca/sub-ca-vpn/'
-caCertFile=${caFolder}'acme_sub_ca_vpn.crt'
-caPrivateKey=${caFolder}'private/acme_sub_ca_vpn.key.decrypted'
-caClientCertFolder=${caFolder}'certs/'
-caConfFile=${caFolder}'ca-conf.conf'
-caClientIndexFile="${caFolder}index.txt"
-caClientCertFileExtension="crt"
-caCrlFile=${caFolder}'crl.pem'
-caCrlNumberFile=${caFolder}'crlnumber'
-caClientIndexAttrFile=${caClientIndexFile}'.attr'
-
-# how long should be the CRL file valid
-caCrlValidDays=70000
+# read settings from config.cfg
+source "`dirname $0`/config.cfg"
 
 # settings for the permitted use of the certificate
 cat << STOPWRITE > ${caConfFile}
@@ -42,11 +33,8 @@ STOPWRITE
 
 ## END OF SETTINGS
 
-# the new name of the certificate 
-CN="$1"
-
 # check if parameter is missing
-if [ -z "${CN}" ]
+if [ -z "${userLogin}" ]
 then
 	echo "ERROR: USAGE $0 CN_NAME_OF_THE_CERTIFICATE"
 	echo "Example: $0 login"
@@ -61,14 +49,17 @@ fi
 
 set -x
 
-# build the file name of the client certificate
-caClientCertFile="${caClientCertFolder}${CN}.${caClientCertFileExtension}"
-
 # revoke the certificate in file ${caClientIndexFile}
-openssl ca -config ${caConfFile} -section 'certs' -revoke ${caClientCertFile} -cert ${caCertFile} -keyfile ${caPrivateKey}
+openssl ca -config ${caConfFile} -section 'certs' -revoke ${caClientCrtFile} -cert ${caCrtFile} -keyfile ${caKeyFile}
 
-# create a new CRL file ${caClientCertFile}
-openssl ca -config ${caConfFile} -section 'certs' -cert ${caCertFile} -keyfile ${caPrivateKey} -crldays ${caCrlValidDays} -gencrl -out ${caCrlFile}
+# create new ${caClientIndexFile}
+sort "${caClientIndexFile}" > "${caClientIndexFile}.old"
+cat "${caClientIndexFile}.old" | grep -v "/CN=${userLogin}$" > "${caClientIndexFile}"
+cat "${caClientIndexFile}.old" | grep '^R' | grep "/CN=${userLogin}$" >> "${caClientIndexFile}"
+diff "${caClientIndexFile}" "${caClientIndexFile}.old"
+
+# create a new CRL file ${caCrlFile}
+openssl ca -config ${caConfFile} -section 'certs' -cert ${caCrtFile} -keyfile ${caKeyFile} -crldays ${caCrlValidDays} -gencrl -out ${caCrlFile}
 
 # print the certificate index file
 cat ${caClientIndexFile}

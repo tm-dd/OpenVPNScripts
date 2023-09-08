@@ -1,0 +1,42 @@
+#!/bin/bash
+#
+# Copyright (C) 2023 Thomas Mueller (tm-dd)
+#
+# This code is free software. You can use, redistribute and/or
+# modify it under the terms of the GNU General Public Licence
+# version 2, as published by the Free Software Foundation.
+# This program is distributed without any warranty.
+# See the GNU General Public Licence for more details.
+#
+
+# the new name of the certificate 
+userLogin="$1"
+
+# read settings from config.cfg
+source "`dirname $0`/config.cfg"
+
+# check if parameter is missing
+if [ -z "${userLogin}" ]
+then
+
+	echo "ERROR: USAGE $0 CN_NAME_FOR_THE_OLD_CERTIFICATE"
+	echo "Example: $0 login"
+	exit -1
+fi
+
+# remove the certificate files, if exists
+if [ -e "${caClientKeyFile}" ] || [ -e "${caClientCrtFile}" ]
+then
+	echo
+	echo "WARNING: Deleting a certificate will NOT REVOKE it. After deleting the certificate with this script, it's still active and can't be revoked with the script 'revoke_certificate', later. Press ENTER if you really want to delete the certificate or press [crtl] + [c] to stop here."
+	read
+	( set -x; sleep 3; rm -v "${caClientKeyFile}" "${caClientCrtFile}" "${caClientCrtChainFile}" )
+	# remove line from ${caClientIndexFile}
+	cp -a "${caClientIndexFile}" "${caClientIndexFile}.old"
+	cat "${caClientIndexFile}.old" | grep -v "/CN=${userLogin}$" > "${caClientIndexFile}"
+	( set -x; diff "${caClientIndexFile}" "${caClientIndexFile}.old" )
+else
+	echo "There was no client key or client certificate found for the CN '${userLogin}'."
+fi
+
+exit 0;

@@ -1,0 +1,71 @@
+#!/bin/bash
+#
+# Copyright (C) 2023 Thomas Mueller (tm-dd)
+#
+# This code is free software. You can use, redistribute and/or
+# modify it under the terms of the GNU General Public Licence
+# version 2, as published by the Free Software Foundation.
+# This program is distributed without any warranty.
+# See the GNU General Public Licence for more details.
+#
+
+# read settings from config.cfg
+source "`dirname $0`/config.cfg"
+
+# stop, if the root ca possible exists
+if [ -e "${caFolder}" ]
+then
+	echo "ERROR: The folder '"${caFolder}"' sill exists."
+	exit -1
+fi
+
+# create folders
+mkdir "${caFolder}" "${caClientCertFolder}" "${caClientKeysFolder}" "${caClientExtFolder}"
+chown -R root:root "${caFolder}"
+chmod -R 700 "${caFolder}" 
+
+# create rand file
+for i in {1..3}; do ps awux | md5sum; done | tr '\n' ' ' | tr '-' ' ' | sed 's/ //g' > "${caPrivateRand}"
+openssl rand -hex 160 >> "${caPrivateRand}"
+
+# create index.txt
+touch ${caClientIndexFile}
+
+# define a start crl number
+if [ ! -f "${caCrlNumberFile}" ]
+then
+	echo 00 > "${caCrlNumberFile}"
+fi
+
+
+set -x
+
+# create the root CA key
+openssl genrsa -out "${caKeyFile}" -rand "${caPrivateRand}" 4096
+chmod 400 "${caKeyFile}"
+chown root:root "${caKeyFile}"
+
+# create and sign a new root CA certificate
+openssl req -x509 -key "${caKeyFile}" -out "${caCrtFile}" -subj "${caCertSubjectStart}" -days "${caValidDays}" -sha512 -nodes 
+
+# read the root CA certificate
+openssl x509 -in "${caCrtFile}" -text -noout
+
+set +x
+
+
+# check and list the new files, if possible
+echo
+if [ -e "${caCrtFile}" ]
+then
+	echo "NEW FILES and FOLDERS:"
+	echo
+	find "${caFolder}"
+	echo
+else
+	echo "ERROR durring ceation of files."
+	echo
+	exit -1
+fi
+
+exit 0;

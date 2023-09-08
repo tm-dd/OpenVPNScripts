@@ -9,22 +9,11 @@
 # See the GNU General Public Licence for more details.
 #
 
-## START SETTINGS
-
 # the new name of the certificate 
 userLogin="$1"
 
-# folders and files for the commands 
-caFolder='/rootca/sub-ca-vpn/'
-caClientCertFolder=${caFolder}'certs/'
-caClientKeysFolder=${caFolder}'keys/'
-caChain=${caFolder}'chain.crt'
-clientCert=${caClientCertFolder}${userLogin}'.crt'
-clientKey=${caClientKeysFolder}${userLogin}'.key'
-clientConfigTemplateDir='/etc/openvpn/client/'
-clientConfigFolder='/openvpn_user_config/'${userLogin}'/'
-
-## END OF SETTINGS
+# read settings from config.cfg
+source "`dirname $0`/config.cfg"
 
 # check if parameter is missing
 if [ -z "${userLogin}" ]
@@ -37,24 +26,22 @@ fi
 # if not exists, create the directory for the new files
 mkdir -p "${clientConfigFolder}"
 
-# change ownership of the configuration folder, if useful and possible
-# ownerAndGroup=`getent passwd | grep "^${userLogin}:" | awk -F ':' '{ print $3 ":" $4 }'`
-ownerAndGroup='www-data:www-data'
+# change ownership of the configuration folder
 chmod 700 "${clientConfigFolder}"
-chown ${ownerAndGroup} "${clientConfigFolder}"
+chown ${clientConfigFilesOwnerAndGroup} "${clientConfigFolder}"
 
 # check and stop, if somnething is missing
-if [ ! -d "${clientConfigTemplateDir}" ] || [ ! -d "${clientConfigFolder}" ] || [ ! -e "${caChain}" ] || [ ! -e "${clientCert}" ] || [ ! -e "${clientKey}" ]
+if [ ! -d "${clientConfigTemplateDir}" ] || [ ! -d "${clientConfigFolder}" ] || [ ! -e "${caServerCrtChainFile}" ] || [ ! -e "${caClientKeyFile}" ] || [ ! -e "${caClientCrtFile}" ]
 then
 	echo "ERROR: something is missing or wrong"
-	ls -ld "${clientConfigTemplateDir}" "${clientConfigFolder}" "${caChain}" "${clientCert}" "${clientKey}"
+	( set -x; ls -ld "${clientConfigTemplateDir}" "${clientConfigFolder}" "${caServerCrtChainFile}" "${caClientKeyFile}" "${caClientCrtFile}" )
 	exit -1
 fi
 
 # read the values
-caChainText=`cat ${caChain}`
-clientCertText=`cat ${clientCert}`
-clientKeyText=`cat ${clientKey}`
+caChainText=`cat ${caServerCrtChainFile}`
+clientKeyText=`cat ${caClientKeyFile}`
+clientCertText=`cat ${caClientCrtFile}`
 
 # copy and edit die configuration files
 cp -a ${clientConfigTemplateDir}*.ovpn "${clientConfigFolder}"
@@ -83,12 +70,17 @@ do
 done
 
 # allow downloading the configuration files
-homeDirectory=`getent passwd | grep "^${userLogin}:" | awk -F ':' '{ print $6 }'`
-if [ ! -e "${homeDirectory}/public_html" ]
+homeDirectoryLDAP=`getent passwd | grep "^${userLogin}:" | awk -F ':' '{ print $6 }'`
+homeDirectoryLocal="/home/${userLogin}"
+if [ "${homeDirectoryLocal}" != "${homeDirectoryLDAP}" ]
+then
+	echo "WARNING: The LDAP home directory '${homeDirectoryLDAP}' differs to the local directory '${homeDirectoryLocal}' with the configuration files. The user CAN'T DOWNLOAD ANY private CONFIGURATION FILE until this problem will be fixed."
+fi
+if [ ! -e "${homeDirectoryLocal}/public_html" ]
 then
 	# create a home directory and setup a link
-	mkdir -p "${homeDirectory}"
-	(set -x; ln -s "${clientConfigFolder}" "${homeDirectory}/public_html" )
+	mkdir -p "${homeDirectoryLocal}"
+	(set -x; ln -s "${clientConfigFolder}" "${homeDirectoryLocal}/public_html" )
 fi
 
 # write a htaccess file to allow only the user to access the files
@@ -97,9 +89,9 @@ echo "require user ${userLogin}" >> "${clientConfigFolder}.htaccess"
 
 # change ownership of the configuration files, if useful and possible
 chmod 400 ${clientConfigFolder}/*.ovpn
-chown -R ${ownerAndGroup} "${clientConfigFolder}"
+chown -R ${clientConfigFilesOwnerAndGroup} "${clientConfigFolder}"
 
 # show files
-( set -x; ls -la "${clientConfigFolder}" )
+( set -x; ls -la "${homeDirectoryLocal}/public_html/" )
 
 exit 0
