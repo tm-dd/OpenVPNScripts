@@ -256,4 +256,6 @@ rmdir "${clientConfigFolderForAllUsers}/*" 2> /dev/null
 # get more messages
 if [ "${1}" = "-vv" ]; then date; (set -x; cat "${caClientIndexFile}"; cat "${oathFile}"; ls -l "/home"); fi
 
+echo
+
 exit 0
