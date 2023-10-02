@@ -21,7 +21,7 @@ scriptPath=`dirname "$0"`'/'
 # reload users and groups from ldap
 date
 echo "reading VPN users ..."
-nscd -i passwd; nscd -i group; sleep 2; getent group "${vpnGroupName}"
+/usr/sbin/nscd -i passwd; /usr/sbin/nscd -i group; /usr/bin/sleep 2; /usr/bin/getent group "${vpnGroupName}"
 
 # set to 'y' to manage this part of the MFA
 manageCertificates=y
