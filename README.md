@@ -21,7 +21,9 @@ scripts and templates to create and manage OpenVPN in five different configurati
 
 # notes
 
-- the script auto_manage_accounts should automatically (by a cronjob) create, revoke and reactivate client access, based on the users of the defined unix group 
-- users should can download configurations files, after login on https://vpn.example.org/~login/configuration
+- you should patch the file /usr/share/doc/openvpn/examples/sample-scripts/auth-pam.pl with the 'auth-ldap-with-pam.pl.patch' 
+- try "apt install openvpn" or download the package from https://packages.debian.org/bookworm/openvpn to get the file 'auth-pam.pl'
+- please configure your MFA method in 'auto_manage_accounts'
+- after setup a cronjob the script auto_manage_accounts should automatically create, revoke and reactivate client access, based on the users of the defined unix group 
+- users should can download configurations files, after login on "https://vpn.example.org/~login/configuration"
 - depending on the configuration, you need not all files and scripts
-- you should patch the file /usr/share/doc/openvpn/examples/sample-scripts/auth-pam.pl with the 'auth-ldap-with-pam.pl.patch'
