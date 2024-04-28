@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (C) 2023 Thomas Mueller (tm-dd)
+# Copyright (C) 2024 Thomas Mueller (tm-dd)
 #
 # This code is free software. You can use, redistribute and/or
 # modify it under the terms of the GNU General Public Licence
@@ -50,6 +50,9 @@ openssl req -x509 -key "${caKeyFile}" -out "${caCrtFile}" -subj "${caCertSubject
 
 # read the root CA certificate
 openssl x509 -in "${caCrtFile}" -text -noout
+
+# create the DH parameter
+openssl dhparam -out ${caDHParFile} ${caDHNumberOfBits}
 
 set +x
 
