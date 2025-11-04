@@ -66,6 +66,12 @@ do
 		echo -e "${newLine//###_USER_KEY_###/${clientKeyText}}"
 	done < "${config}" > "${config}.new"
 	mv "${config}.new" "${config}"
+
+	# insert the login name for the commands
+	while read newLine; do
+		echo -e "${newLine//###_USER_LOGIN_###/${userLogin}}"
+	done < "${config}" > "${config}.new"
+	mv "${config}.new" "${config}"
 	
 done
 
