@@ -41,12 +41,19 @@ fi
 set -x
 
 # create the root CA key
-openssl genrsa -out "${caKeyFile}" -rand "${caPrivateRand}" 4096
+if [ "${encryptCa}" -ne "y" ]
+then
+	openssl genrsa -out "${caKeyFile}" -rand "${caPrivateRand}" 4096
+else
+	echo "WARNING: By using a passphrase for the key, you scripts will ask that for any sining process later and"
+	echo "         scripts like 'auto_manage_accounts' can't run by cronjobs without this passphrase later."
+	openssl genrsa -aes256 -out "${caKeyFile}" -rand "${caPrivateRand}" 4096
+fi
 chmod 400 "${caKeyFile}"
 chown root:root "${caKeyFile}"
 
 # create and sign a new root CA certificate
-openssl req -x509 -key "${caKeyFile}" -out "${caCrtFile}" -subj "${caCertSubjectStart}" -days "${caValidDays}" -sha512 -nodes 
+openssl req -x509 -key "${caKeyFile}" -out "${caCrtFile}" -subj "${caCertSubjectStart}" -days "${caValidDays}" -sha512 -nodes
 
 # read the root CA certificate
 openssl x509 -in "${caCrtFile}" -text -noout
