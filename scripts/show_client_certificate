@@ -1,0 +1,55 @@
+#!/bin/bash
+#
+# Copyright (C) 2025 Thomas Mueller (tm-dd)
+#
+# This code is free software. You can use, redistribute and/or
+# modify it under the terms of the GNU General Public Licence
+# version 2, as published by the Free Software Foundation.
+# This program is distributed without any warranty.
+# See the GNU General Public Licence for more details.
+#
+
+# the new name of the certificate 
+userLogin="$1"
+
+## START SETTINGS
+
+# read settings from config.cfg
+source "`dirname $0`/config.cfg"
+
+## END OF SETTINGS
+
+# go to the folder of certificates
+if [ ! -e "${caClientCertFolder}" ] || [ ! -e "${caClientKeysFolder}" ]
+then
+	echo "ERROR: Missing folder for keys and/or certs. Maybe you need to create a certificate at first."
+	exit -1
+fi
+
+	cd "${caClientCertFolder}"
+
+
+# check if parameter is missing
+if [ -z "${userLogin}" ]
+then
+
+	echo "ERROR: USAGE $0 CN_NAME_FOR_THE_NEW_CERTIFICATE"
+	echo "Example: $0 login"
+	exit -1
+fi
+
+# read the certificat file or exit
+if [ -e "${caClientCrtFile}" ]
+then
+	caClientSerialNumber=`openssl x509 -in "${caClientCrtFile}" -text -noout | grep -A 1 'Serial Number:' | tail -n 1 | sed 's/://g' | awk '{ print $1 }'`
+	# read the certificate
+	set -x
+	openssl x509 -in "${caClientCrtFile}" -text -noout
+	grep "${caClientSerialNumber}" "${caClientIndexFile}"
+	ls -l "${caClientKeyFile}" "${caClientCrtFile}" "${caClientCrtChainFile}"
+	set +x
+else
+	echo "ERROR: Did not found the file '"${caClientCrtFile}"' on the system."
+fi
+
+exit 0;
