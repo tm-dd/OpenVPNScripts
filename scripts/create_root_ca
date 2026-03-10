@@ -41,7 +41,7 @@ fi
 set -x
 
 # create the root CA key
-if [ "${encryptCa}" -ne "y" ]
+if [ "${encryptCaKey}" != "y" ]
 then
 	openssl genrsa -out "${caKeyFile}" -rand "${caPrivateRand}" 4096
 else
