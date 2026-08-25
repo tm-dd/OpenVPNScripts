@@ -1,0 +1,80 @@
+#!/bin/bash
+#
+# Copyright (C) 2026 Thomas Mueller (tm-dd)
+#
+# This code is free software. You can use, redistribute and/or
+# modify it under the terms of the GNU General Public Licence
+# version 2, as published by the Free Software Foundation.
+# This program is distributed without any warranty.
+# See the GNU General Public Licence for more details.
+#
+
+# the new name of the certificate 
+userLogin="$1"
+
+## START SETTINGS
+
+# read settings from config.cfg
+source "`dirname $0`/config.cfg"
+
+# settings for the permitted use of the certificate
+cat << STOPWRITE > ${caConfFile}
+[certs]
+database = ${caClientIndexFile}
+crl_dir = ${caFolder}
+crlnumber = ${caCrlNumberFile}
+default_md = sha512
+STOPWRITE
+
+# settings for ${caClientIndexFile}
+cat << STOPWRITE > ${caClientIndexAttrFile}
+unique_subject = no
+STOPWRITE
+
+## END OF SETTINGS
+
+# check if parameter is missing
+if [ -z "${userLogin}" ]
+then
+	echo "ERROR: USAGE $0 CN_NAME_OF_THE_CERTIFICATE"
+	echo "Example: $0 login"
+	exit -1
+fi
+
+# define a start crl number
+if [ ! -f "${caCrlNumberFile}" ]
+then
+	echo 00 > "${caCrlNumberFile}"
+fi
+
+set -x
+
+# revoke the certificate in file ${caClientIndexFile}
+openssl ca -config ${caConfFile} -section 'certs' -revoke ${caClientCrtFile} -cert ${caCrtFile} -keyfile ${caKeyFile}
+
+# create new ${caClientIndexFile}
+sort "${caClientIndexFile}" > "${caClientIndexFile}.old"
+cat "${caClientIndexFile}.old" | grep -v "/CN=${userLogin}$" > "${caClientIndexFile}"
+cat "${caClientIndexFile}.old" | grep '^R' | grep "/CN=${userLogin}$" | sed "s/CN=${userLogin}/CN=${userLogin}_revoked_`date +%Y-%m-%d_%T`/" >> "${caClientIndexFile}"
+diff "${caClientIndexFile}" "${caClientIndexFile}.old"
+
+# create a new CRL file ${caCrlFile}
+openssl ca -config ${caConfFile} -section 'certs' -cert ${caCrtFile} -keyfile ${caKeyFile} -crldays ${caCrlValidDays} -gencrl -out ${caCrlFile}
+
+# print the certificate index file
+cat ${caClientIndexFile}
+
+# create folders
+mkdir -p "${caClientCertFolder}_revoked_" "${caClientKeysFolder}_old_"
+
+# move cert and key to let creating new ones
+mv "${caClientCrtFile}" "${caClientCertFolder}_old_/"
+mv "${caClientCrtChainFile}" "${caClientCertFolder}_old_/"
+mv "${caClientKeyFile}" "${caClientKeysFolder}_old_/"
+
+# print the CRL file
+openssl crl -in ${caCrlFile} -text -noout
+
+set +x
+
+exit 0
