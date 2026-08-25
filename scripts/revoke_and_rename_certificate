@@ -65,7 +65,7 @@ openssl ca -config ${caConfFile} -section 'certs' -cert ${caCrtFile} -keyfile ${
 cat ${caClientIndexFile}
 
 # create folders
-mkdir -p "${caClientCertFolder}_revoked_" "${caClientKeysFolder}_old_"
+mkdir -p "${caClientCertFolder}_old_" "${caClientKeysFolder}_old_"
 
 # move cert and key to let creating new ones
 mv "${caClientCrtFile}" "${caClientCertFolder}_old_/"
