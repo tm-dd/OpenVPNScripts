@@ -65,12 +65,16 @@ openssl ca -config ${caConfFile} -section 'certs' -cert ${caCrtFile} -keyfile ${
 cat ${caClientIndexFile}
 
 # create folders
-mkdir -p "${caClientCertFolder}_old_" "${caClientKeysFolder}_old_"
+clientOldConfigFolder="${clientConfigFolderForAllUsers}/_old_/`date +%Y-%m-%d`"
+mkdir -p "${caClientCertFolder}_old_" "${caClientKeysFolder}_old_" "${clientOldConfigFolder}"
+chown root:root "${caClientCertFolder}_old_" "${caClientKeysFolder}_old_" "${clientOldConfigFolder}"
+chmod 700 "${caClientCertFolder}_old_" "${caClientKeysFolder}_old_" "${clientOldConfigFolder}"
 
-# move cert and key to let creating new ones
+# move cert, key and configuration to let creating new ones
 mv "${caClientCrtFile}" "${caClientCertFolder}_old_/"
 mv "${caClientCrtChainFile}" "${caClientCertFolder}_old_/"
 mv "${caClientKeyFile}" "${caClientKeysFolder}_old_/"
+mv "${clientConfigFolder}" "${clientOldConfigFolder}"
 
 # print the CRL file
 openssl crl -in ${caCrlFile} -text -noout
