@@ -20,8 +20,8 @@
 - 'disable_user_oath' ............... disable a TOTP secret for a account
 - 'enable_user_oath'  ............... enable a TOTP secret for a account
 - 'reactivate_certificate' .......... reactivate a revoked client certificate
-- 'revoke_and_rename_certificate' ... deactivate a revoked client certificate and move all files away to allow creating a new one
-- 'revoke_certificate' .............. deactivate a revoked client certificate
+- 'revoke_and_rename_certificate' ... revoke a client certificate and move all files away to allow creating a new one
+- 'revoke_certificate' .............. revoke a client certificate an keep it for reactivation
 - 'show_client_certificate' ......... show information from the client certificate
 
 ## folders
